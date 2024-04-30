@@ -3,9 +3,13 @@ import { View, Text, TextInput, TouchableOpacity, Image, Animated } from 'react-
 import { styled } from 'nativewind';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import auth from "@react-native-firebase/auth"
-import Onboarding from './Onboarding'
 import {NavigationContainer} from '@react-navigation/native';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import firestore from '@react-native-firebase/firestore';
 
+GoogleSignin.configure({
+  webClientId: '41274838584-680c8sgq16fojgeq7nla5j6foioqq46p.apps.googleusercontent.com',
+});
 
 const Stack = createNativeStackNavigator();
 const StyledView = styled(View);
@@ -17,13 +21,17 @@ const StyledImage = styled(Image);
 function Starter() {
 
   const [currentScreen, setCurrentScreen] = useState(0);
+  const [satbChoice, setSatbChoice] = useState(0);
   const [onboardError, setOnboardError] = useState('');
   const [login, setLogin] = useState(true);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [passwordVisible, setPasswordVisible] = useState(true);
   const [onboardingCode, setOnboardingCode] = useState('');
-
+  const [createAccountError, setCreateAccountError] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [signinError, setSigninError] = useState('');
 
   const nextScreen = () => {
     setCurrentScreen(currentScreen + 1);
@@ -52,7 +60,6 @@ function Starter() {
   }
 
   function codeEntered() {
-    // if onboarding code is correct
     if (onboardingCode === '123456') {
       nextScreen()
     } else {
@@ -60,8 +67,129 @@ function Starter() {
     }
   }
 
+  function setTheSatb(memberspart) {
+    console.log(memberspart)
+    setSatbChoice(memberspart)
+    nextScreen()
+  }
 
+  async function signinEmailPass() {
 
+    try {
+      await auth().signInWithEmailAndPassword(username, password);
+      console.log('User signed in!');
+    } catch (error) {
+      if (error.code === 'auth/too-many-requests') {
+        setSigninError('Too many login attempts, try again later!');
+      } else if (error.code === 'auth/invalid-credential') {
+        setSigninError(`Email or password isn't quite right!`);
+      }
+      console.error(error.code);
+    }
+
+  }
+
+  async function createUserEmailPass() {
+    try {
+      const userCredential = await auth().createUserWithEmailAndPassword(username, password);
+      console.log('User account created & signed in!');
+  
+
+      const capitalizedFirstName = firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
+      const capitalizedLastName = lastName.charAt(0).toUpperCase() + lastName.slice(1).toLowerCase();
+
+      await firestore()
+        .collection('users')
+        .doc(userCredential.user.uid)
+        .set({
+          choir_code: onboardingCode, 
+          current_choir_selected: "",
+          email: username,
+          emailVerified: false,
+          image: userCredential.user.photoURL,
+          name: capitalizedFirstName + ' ' + capitalizedLastName,
+          part: satbChoice,
+          user_type: "student"
+          });
+
+      console.log('User added to Firestore!');
+
+    } catch (error) {
+      if (error.code === 'auth/email-already-in-use') {
+        setCreateAccountError('That email address is already in use!');
+      } else if (error.code === 'auth/invalid-email') {
+        setCreateAccountError('That email address is invalid!');
+      }
+      console.error(error);
+    }
+  }
+
+  async function onGoogleButtonPress() {
+    try {
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      const { idToken } = await GoogleSignin.signIn();
+      const googleCredential = auth.GoogleAuthProvider.credential(idToken);
+      const userCredential = await auth().signInWithCredential(googleCredential);
+  
+      // Check if the user document already exists in Firestore.
+      const userDocRef = firestore().collection('users').doc(userCredential.user.uid);
+      const docSnapshot = await userDocRef.get();
+  
+      if (!docSnapshot.exists) {
+        const capitalizedFirstName = firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
+        const capitalizedLastName = lastName.charAt(0).toUpperCase() + lastName.slice(1).toLowerCase();
+  
+        await userDocRef.set({
+          choir_code: onboardingCode,
+          current_choir_selected: "",
+          email: userCredential.user.email,
+          emailVerified: userCredential.user.emailVerified,
+          image: userCredential.user.photoURL,
+          name: capitalizedFirstName + ' ' + capitalizedLastName,
+          part: satbChoice,
+          user_type: "student"
+        });
+        console.log('New user added to Firestore!');
+      } else {
+        console.log('User already exists in Firestore.');
+      }
+  
+      return userCredential;
+    } catch (error) {
+      console.error('Google Sign-In Error: ', error);
+      throw new Error(error);
+    }
+  }
+
+  //////////// NUMBER TWOOOOOOOOOOOOOO /////////////
+//////////// NUMBER TWOOOOOOOOOOOOOO /////////////
+
+async function justGoogleSignin() {
+  try {
+    await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+    const { idToken } = await GoogleSignin.signIn();
+    const googleCredential = auth.GoogleAuthProvider.credential(idToken);
+    const userCredential = await auth().signInWithCredential(googleCredential);
+
+    // Check if the user document already exists in Firestore.
+    const userDocRef = firestore().collection('users').doc(userCredential.user.uid);
+    const docSnapshot = await userDocRef.get();
+
+    if (!docSnapshot.exists) {
+      await auth().signOut();
+      console.log('Signed out user because they havent created an account yet!');
+    }
+
+    return userCredential;
+  } catch (error) {
+    console.error('Google Sign-In Error: ', error);
+    throw new Error(error);
+  }
+}
+
+  //////////// NUMBER TWOOOOOOOOOOOOOO /////////////
+  /////////////////////////////////////////////////
+  
   const screens = [
 
     <View>
@@ -90,7 +218,96 @@ function Starter() {
 
     // SECOND SCREEN
 
+        <View className="flex h-full bg-white items-center px-4">
+        
+        <TouchableOpacity onPress={prevScreen} className="flex items-center absolute left-2 top-3">
+          <Image className='h-[15px] w-[18px]' source={require('../public/grayarrow.png')}/>
+        </TouchableOpacity>
+
+      <View className='flex justify-center items-center'>
+        <Image className='w-44 h-44 mt-20' source={require('../public/3.png')}/>
+        <Image className='w-52 h-8 mt-2' source={require('../public/logo.png')}/>
+        <Text className='text-slate-400 px-20 text-center text-md mt-2 text-md'>Let's get started. Which part do you sing?</Text>
+      </View>
+      
+      <View className='w-full flex flex-col gap-y-3.5 justify-end mb-3 mt-20'>
+
+      <TouchableOpacity className='h-10 w-full flex justify-center  bg-[#FFDE1A] border border-b-4 border-[#FFCE00] rounded-xl'>
+          <Text className='text-white text-center text-md font-bold' onPress={() => setTheSatb("soprano")}>SOPRANO</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity className='h-10 w-full flex justify-center  bg-[#FFDE1A] border border-b-4 border-[#FFCE00] rounded-xl'>
+          <Text className='text-white text-center text-md font-bold' onPress={() => setTheSatb("alto")}>ALTO</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity className='h-10 w-full flex justify-center  bg-[#FFDE1A] border border-b-4 border-[#FFCE00] rounded-xl'>
+          <Text className='text-white text-center text-md font-bold' onPress={() => setTheSatb("tenor")}>TENOR</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity className='h-10 w-full flex justify-center  bg-[#FFDE1A] border border-b-4 border-[#FFCE00] rounded-xl'>
+          <Text className='text-white text-center text-md font-bold' onPress={() => setTheSatb("bass")}>BASS</Text>
+        </TouchableOpacity>
+      </View>
+    </View>,
+
+    // THIRD SCREEN
+
     <View className="flex h-full bg-white items-center justify-between px-4">
+        
+        <TouchableOpacity onPress={prevScreen} className="flex items-center absolute left-2 top-3">
+          <Image className='h-[15px] w-[18px]' source={require('../public/grayarrow.png')}/>
+        </TouchableOpacity>
+
+      <View className='flex justify-center items-center'>
+        <Image className='w-44 h-44 mt-16' source={require('../public/3.png')}/>
+        <Image className='w-52 h-8 mt-2' source={require('../public/logo.png')}/>
+        <Text className='text-slate-400 px-20 text-center text-md mt-2 text-md'>Now, lets get your name...</Text>
+
+        <TextInput
+                  className="border border-gray-300 pl-4 bg-[#F7F7F7] rounded-xl text-lg text-gray-700 mt-2 px-20"
+                  placeholder="First Name"
+                  onChangeText={setFirstName}
+                  value={firstName}
+                  placeholderTextColor="rgba(0, 0, 0, 0.3)"
+                  autoCapitalize="none"
+                />
+                
+        <TextInput
+                  className="border border-gray-300 pl-4 bg-[#F7F7F7] rounded-xl text-lg text-gray-700 mt-2 px-20"
+                  placeholder="Last Name"
+                  onChangeText={setLastName}
+                  value={lastName}
+                  placeholderTextColor="rgba(0, 0, 0, 0.3)"
+                  autoCapitalize="none"
+                />
+      
+      </View>
+
+        {firstName.length === 0 || lastName.length === 0 ? (
+        <View className='w-full flex flex-col gap-y-3.5 justify-end mb-3'>
+          <TouchableOpacity
+            className='h-10 w-full flex justify-center bg-gray-300 rounded-xl'
+            disabled={true}
+          >
+            <Text className='text-white text-center text-md font-bold'>CONTINUE</Text>
+          </TouchableOpacity>
+          </View>
+        ) : (
+          <View className='w-full flex flex-col gap-y-3.5 justify-end mb-3'>
+            <TouchableOpacity
+              className='h-10 w-full flex justify-center bg-[#FFDE1A] border border-b-4 border-[#FFCE00] rounded-xl'
+              onPress={nextScreen}
+            >
+              <Text className='text-white text-center text-md font-bold' onPress={nextScreen}>CONTINUE</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+    </View>,
+
+    // FOURTH SCREEN
+
+        <View className="flex h-full bg-white items-center justify-between px-4">
         
         <TouchableOpacity onPress={prevScreen} className="flex items-center absolute left-2 top-3">
           <Image className='h-[15px] w-[18px]' source={require('../public/grayarrow.png')}/>
@@ -100,8 +317,6 @@ function Starter() {
         <Image className='w-44 h-44 mt-16' source={require('../public/2.png')}/>
         <Image className='w-52 h-8 mt-2' source={require('../public/logo.png')}/>
         <Text className='text-slate-400 px-20 text-center text-md mt-2 text-md'>Enter your choir code below to join as an official member!</Text>
-
-
 
         <TextInput
                   className="border border-gray-300 pl-4 bg-[#F7F7F7] rounded-xl text-lg text-gray-700 mt-6"
@@ -114,8 +329,6 @@ function Starter() {
                 />
 
       <Text className='text-red-400 px-20 text-center text-md mt-2 text-md'>{onboardError}</Text>
-
-
       </View>
 
         {onboardingCode.length === 0 ? (
@@ -131,7 +344,7 @@ function Starter() {
           <View className='w-full flex flex-col gap-y-3.5 justify-end mb-3'>
             <TouchableOpacity
               className='h-10 w-full flex justify-center bg-[#FFDE1A] border border-b-4 border-[#FFCE00] rounded-xl'
-              onPress={nextScreen}
+              onPress={codeEntered}
             >
               <Text className='text-white text-center text-md font-bold' onPress={codeEntered}>CONTINUE</Text>
             </TouchableOpacity>
@@ -140,7 +353,7 @@ function Starter() {
 
     </View>,
 
-    // THIRD SCREEN
+    // FIFTH SCREEN
 
         <View className="h-full w-full bg-white flex items-center">
           <View className="w-full px-4 flex justify-between flex-col h-full">
@@ -189,9 +402,16 @@ function Starter() {
 
               </View>
 
+              {createAccountError && (
+                <Text className="mt-4">
+                  {createAccountError}
+                </Text>
+              )}
+
+
               {username.length > 0 && password.length > 0 ? (
 
-                <TouchableOpacity className='mt-4 h-10 w-full flex justify-center border rounded-xl border-b-4 bg-[#FFCE00] border-[#FFA700]' onPress={setTheLogin}>
+                <TouchableOpacity className='mt-4 h-10 w-full flex justify-center border rounded-xl border-b-4 bg-[#FFCE00] border-[#FFA700]' onPress={() => createUserEmailPass()}>
                   <Text className='text-white text-center font-bold text-lg'>CREATE ACCOUNT</Text>
                 </TouchableOpacity>
 
@@ -216,7 +436,7 @@ function Starter() {
                     <Text className='text-[#0266FF] text-center font-bold text-lg flex items-center justify-center'>FACEBOOK</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity className='mt-4 gap-x-1 h-12 flex flex-row justify-center items-center border flex-1 rounded-xl border-b-4 bg-white border-slate-300'>
+                <TouchableOpacity className='mt-4 gap-x-1 h-12 flex flex-row justify-center items-center border flex-1 rounded-xl border-b-4 bg-white border-slate-300' onPress={() => onGoogleButtonPress().then(() => console.log('Signed in with Google!'))}>
                     <Image className='h-6 w-6' source={require('../public/google.png')}/>
                     <Text className='text-gray-500 text-center font-bold text-lg flex items-center justify-center'>GOOGLE</Text>
                 </TouchableOpacity>
@@ -300,12 +520,13 @@ function Starter() {
                   </TouchableOpacity>
                 </View>
 
-
               </View>
+
+              {signinError && <Text className='mt-3'>{signinError}</Text>}
 
               {username.length > 0 && password.length > 0 ? (
 
-                <TouchableOpacity className='mt-4 h-10 w-full flex justify-center border rounded-xl border-b-4 bg-[#19B1F4] border-[#1797D2]' onPress={setTheLogin}>
+                <TouchableOpacity className='mt-4 h-10 w-full flex justify-center border rounded-xl border-b-4 bg-[#19B1F4] border-[#1797D2]' onPress={signinEmailPass}>
                   <Text className='text-white text-center font-bold text-lg'>SIGN IN</Text>
                 </TouchableOpacity>
 
@@ -330,7 +551,7 @@ function Starter() {
                     <Text className='text-[#0266FF] text-center font-bold text-lg flex items-center justify-center'>FACEBOOK</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity className='mt-4 gap-x-1 h-12 flex flex-row justify-center items-center border flex-1 rounded-xl border-b-4 bg-white border-slate-300'>
+                <TouchableOpacity className='mt-4 gap-x-1 h-12 flex flex-row justify-center items-center border flex-1 rounded-xl border-b-4 bg-white border-slate-300' onPress={justGoogleSignin}>
                     <Image className='h-6 w-6' source={require('../public/google.png')}/>
                     <Text className='text-gray-500 text-center font-bold text-lg flex items-center justify-center'>GOOGLE</Text>
                 </TouchableOpacity>

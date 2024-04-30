@@ -1,11 +1,13 @@
 import React from 'react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {NavigationContainer} from '@react-navigation/native';
 import { View, Text, TextInput, TouchableOpacity, Image, StatusBar, ScrollView } from 'react-native';
 import { styled } from 'nativewind';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import Starter from './pages/Starter';
 import SplashScreen from 'react-native-splash-screen'
+import auth from '@react-native-firebase/auth';
+
 
 const Stack = createNativeStackNavigator();
 
@@ -13,25 +15,45 @@ function App() {
 
   SplashScreen.hide();
 
+  const [initializing, setInitializing] = useState(true);
+  const [user, setUser] = useState();
+  console.log(user);
+
+  // Handle user state changes
+  function onAuthStateChanged(user) {
+    setUser(user);
+    if (initializing) setInitializing(false);
+  }
+
+  useEffect(() => {
+    const subscriber = auth().onAuthStateChanged(onAuthStateChanged);
+    return subscriber; // unsubscribe on unmount
+  }, []);
+
+  if (initializing) return null;
+
+  if (!user) {
+
   return (
-    // <NavigationContainer>
-    //   <Stack.Navigator>
-    //     <Stack.Screen
-    //       name="Home"
-    //       component={Starter}
-    //       options={{title: 'Harmony Hive'}}
-    //     />
-    //   </Stack.Navigator>
-    // </NavigationContainer>
     <View>
       <Starter />
     </View>
   );
+} else {
+  return (
+        <GameScreen />
+  );
+}
 }
 
 export default App;
 
 const GameScreen = () => {
+
+  async function signOutUser () {
+    await auth().signOut();
+  }
+
   const [activeIndex, setActiveIndex] = useState(0);
 
   // Placeholder data for the scrollable content
@@ -75,6 +97,7 @@ const GameScreen = () => {
       <View className="flex-row items-center">
         <Text className="text-white mx-2">5636</Text>
         <Image source={require('./public/duo.png')} className="h-6 w-6" />
+        <TouchableOpacity className="w-28 h-28 bg-black" onPress={() => signOutUser()} />
       </View>
       {/* Right Side */}
       <View className="flex-row items-center">

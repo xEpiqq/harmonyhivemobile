@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "41274838584-t9vv6e19v4cic5op82oeg016e2p6veg7.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.harmonyhivemobile",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
           "client_id": "41274838584-680c8sgq16fojgeq7nla5j6foioqq46p.apps.googleusercontent.com",
           "client_type": 3
         }
