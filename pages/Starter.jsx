@@ -12,11 +12,6 @@ GoogleSignin.configure({
 });
 
 const Stack = createNativeStackNavigator();
-const StyledView = styled(View);
-const StyledText = styled(Text);
-const StyledInput = styled(TextInput);
-const StyledButton = styled(TouchableOpacity);
-const StyledImage = styled(Image);
 
 function Starter() {
 
@@ -27,14 +22,25 @@ function Starter() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [passwordVisible, setPasswordVisible] = useState(true);
+  const [passwordVisibleCreate, setPasswordVisibleCreate] = useState(false);
   const [onboardingCode, setOnboardingCode] = useState('');
   const [createAccountError, setCreateAccountError] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [signinError, setSigninError] = useState('');
+  const [choirJoinName, setChoirJoinName] = useState('');
+  const [choirJoinUid, setChoirJoinUid] = useState('');
 
   const nextScreen = () => {
     setCurrentScreen(currentScreen + 1);
+  };
+
+  const joinNewChoirScreen = () => {
+    setCurrentScreen(6);
+  };
+
+  const goToFirstScreen = () => {
+    setCurrentScreen(1);
   };
 
   // Function to go back to the previous screen
@@ -59,13 +65,30 @@ function Starter() {
     setPasswordVisible(true);
   }
 
-  function codeEntered() {
-    if (onboardingCode === '123456') {
-      nextScreen()
-    } else {
-      setOnboardError('Wrong code, sorry!');
+  async function codeEntered() {
+    try {
+      const choirsCollectionRef = firestore().collection('choirs');
+      const querySnapshot = await choirsCollectionRef.where('code', '==', onboardingCode).get();
+  
+      if (querySnapshot.empty) {
+        setOnboardError('Wrong code, sorry!');
+      } else {
+        const choirDoc = querySnapshot.docs[0];
+        const choirName = querySnapshot.docs[0].data().name;
+        const choirUid = choirDoc.id;
+        setChoirJoinUid(choirUid);
+        setChoirJoinName(choirName);
+        console.log("Choir Name:", choirName);
+        nextScreen();
+        setOnboardError('');
+      }
+    } catch (error) {
+      console.error('Error fetching choirs:', error);
+      setOnboardError('An error occurred while checking the code.');
     }
   }
+  
+
 
   function setTheSatb(memberspart) {
     console.log(memberspart)
@@ -94,7 +117,6 @@ function Starter() {
       const userCredential = await auth().createUserWithEmailAndPassword(username, password);
       console.log('User account created & signed in!');
   
-
       const capitalizedFirstName = firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
       const capitalizedLastName = lastName.charAt(0).toUpperCase() + lastName.slice(1).toLowerCase();
 
@@ -102,8 +124,7 @@ function Starter() {
         .collection('users')
         .doc(userCredential.user.uid)
         .set({
-          choir_code: onboardingCode, 
-          current_choir_selected: "",
+          choirs_joined: [ choirJoinUid ],
           email: username,
           emailVerified: false,
           image: userCredential.user.photoURL,
@@ -140,8 +161,7 @@ function Starter() {
         const capitalizedLastName = lastName.charAt(0).toUpperCase() + lastName.slice(1).toLowerCase();
   
         await userDocRef.set({
-          choir_code: onboardingCode,
-          current_choir_selected: "",
+          choirs_joined: [ choirJoinUid ],
           email: userCredential.user.email,
           emailVerified: userCredential.user.emailVerified,
           image: userCredential.user.photoURL,
@@ -160,9 +180,6 @@ function Starter() {
       throw new Error(error);
     }
   }
-
-  //////////// NUMBER TWOOOOOOOOOOOOOO /////////////
-//////////// NUMBER TWOOOOOOOOOOOOOO /////////////
 
 async function justGoogleSignin() {
   try {
@@ -186,9 +203,6 @@ async function justGoogleSignin() {
     throw new Error(error);
   }
 }
-
-  //////////// NUMBER TWOOOOOOOOOOOOOO /////////////
-  /////////////////////////////////////////////////
   
   const screens = [
 
@@ -207,13 +221,19 @@ async function justGoogleSignin() {
       <View className='flex justify-center items-center'>
         <Image className='w-44 h-44 mt-44' source={require('../public/1.png')}/>
         <Image className='w-52 h-8 mt-2' source={require('../public/logo.png')}/>
-        <Text className='text-slate-400 px-20 text-center text-md mt-2 text-md'>The fun and effective way to learn choir music at home.</Text>
+        <Text className='text-slate-400 px-20 text-center text-md mt-2 text-md'>Choose your own adventure.</Text>
       </View>
       <View className='w-full flex flex-col gap-y-3.5 justify-end mb-3'>
-        <TouchableOpacity className='h-10 w-full flex justify-center  bg-[#FFDE1A] border border-b-4 border-[#FFCE00] rounded-xl'>
-          <Text className='text-white text-center text-md font-bold' onPress={nextScreen}>CONTINUE</Text>
-        </TouchableOpacity>
-      </View>
+
+          <TouchableOpacity className='h-10 w-full flex justify-center  bg-[#FFCE00] border border-b-4 border-[#FFA700] rounded-xl' onPress={nextScreen}>
+            <Text className='text-white text-center text-md font-bold'>NEW ACCOUNT</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity className='h-10 w-full flex justify-center border rounded-xl border-b-4 border-slate-400' onPress={setTheLogin}>
+            <Text className='text-[#FFA700] text-center text-md font-bold' onPress={joinNewChoirScreen}>JOIN ANOTHER CHOIR</Text>
+          </TouchableOpacity>
+
+        </View>
     </View>,
 
     // SECOND SCREEN
@@ -362,52 +382,45 @@ async function justGoogleSignin() {
                   <Image className='h-[15px] w-[18px]' source={require('../public/grayarrow.png')}/>
                 </TouchableOpacity>
 
-            <View>
-              <View className="flex flex-row items-center justify-center relative mb-4 mt-16">
+            <View className='flex gap-2 mt-12'>
 
-                <Text className="text-lg font-bold flex items-center justify-center text-gray-400">Create an account and join ChoirName</Text>
+              <View className="flex flex-row items-center justify-center relative mb-4 mt-16">
+                <Text className="text-lg font-bold flex items-center justify-center text-gray-400">Create an account and join {choirJoinName}</Text>
               </View>
 
-              <View className="rounded-xl border border-gray-300">
-                <TextInput
-                  className="border-b border-gray-300 pl-4 bg-[#F7F7F7] rounded-t-xl text-lg text-gray-700"
-                  placeholder="Username or email"
+              <TextInput
+                  className="border-gray-300 pl-4 bg-[#F7F7F7] rounded-xl text-lg text-gray-700"
+                  placeholder="Email Address"
                   onChangeText={setUsername}
                   value={username}
                   placeholderTextColor="rgba(0, 0, 0, 0.3)"
                   autoCapitalize="none"
                 />
-                
-                
-                <View className="bg-[#F7F7F7] flex flex-row items-center justify-between rounded-b-xl">
 
+              <View className="bg-[#F7F7F7] flex flex-row items-center justify-between rounded-b-xl border-gray-300 rounded-xl">
                   <TextInput
-                    className="p-2 pl-4 bg-[#F7F7F7] rounded-b-xl text-lg text-gray-700"
+                    className="p-2 pl-4 bg-[#F7F7F7] rounded-xl text-lg text-gray-700"
                     placeholder="Password"
                     onChangeText={setPassword}
                     value={password}
-                    secureTextEntry={passwordVisible}
+                    secureTextEntry={passwordVisibleCreate}
                     placeholderTextColor="rgba(0, 0, 0, 0.3)"
                     autoCapitalize="none"
                   />
 
-                  <TouchableOpacity onPress={() => setPasswordVisible(!passwordVisible)}>
+                  <TouchableOpacity onPress={() => setPasswordVisibleCreate(!passwordVisibleCreate)}>
                     <Image
                       className="w-6 h-6 mr-3 opacity-40"
-                      source={passwordVisible ? require('../public/password_eye.png') : require('../public/password_eye_strike.png')}
+                      source={passwordVisibleCreate ? require('../public/password_eye.png') : require('../public/password_eye_strike.png')}
                     />
                   </TouchableOpacity>
                 </View>
-
-
-              </View>
-
+              
               {createAccountError && (
                 <Text className="mt-4">
                   {createAccountError}
                 </Text>
               )}
-
 
               {username.length > 0 && password.length > 0 ? (
 
@@ -418,7 +431,7 @@ async function justGoogleSignin() {
               ) : (
 
                 <TouchableOpacity className="mb-2 bg-gray-200 p-2 rounded-xl mt-4">
-                <Text className="text-center font-semibold text-lg">CREATE ACCOUNT</Text>
+                <Text className="text-center font-semibold text-lg text-gray-400">CREATE ACCOUNT</Text>
                 </TouchableOpacity>
 
               )
@@ -448,6 +461,63 @@ async function justGoogleSignin() {
 
           </View>
         </View>,
+
+        // SIXTH SCREEN
+
+        <View className="flex h-full bg-white items-center justify-between px-4">
+        
+        <TouchableOpacity onPress={goToFirstScreen} className="flex items-center absolute left-2 top-3">
+          <Image className='h-[15px] w-[18px]' source={require('../public/grayarrow.png')}/>
+        </TouchableOpacity>
+
+      <View className='flex justify-center items-center'>
+        <Image className='w-44 h-44 mt-16' source={require('../public/2.png')}/>
+        <Image className='w-52 h-8 mt-2' source={require('../public/logo.png')}/>
+        <Text className='text-slate-400 px-20 text-center text-md mt-2 text-md'>Enter your choir code and email address to join.</Text>
+
+        <TextInput
+                  className="border border-gray-300 pl-4 pr-4 bg-[#F7F7F7] rounded-xl text-lg text-gray-700 mt-6"
+                  placeholder="Choir Membership Code"
+                  onChangeText={setOnboardingCode}
+                  value={onboardingCode}
+                  placeholderTextColor="rgba(0, 0, 0, 0.3)"
+                  autoCapitalize="none"
+                  maxLength={6}
+                />
+
+        <TextInput
+                  className="border border-gray-300 pl-4 pr-24 bg-[#F7F7F7] rounded-xl text-lg text-gray-700 mt-2"
+                  placeholder="Email Address"
+                  onChangeText={setUsername}
+                  value={username}
+                  placeholderTextColor="rgba(0, 0, 0, 0.3)"
+                  autoCapitalize="none"
+                />
+
+      <Text className='text-red-400 px-20 text-center text-md mt-2 text-md'>{onboardError}</Text>
+      </View>
+
+        {onboardingCode.length === 0 || username.length === 0 ? (
+        <View className='w-full flex flex-col gap-y-3.5 justify-end mb-3'>
+          <TouchableOpacity
+            className='h-10 w-full flex justify-center bg-gray-300 rounded-xl'
+            disabled={true}
+          >
+            <Text className='text-white text-center text-md font-bold'>JOIN CHOIR</Text>
+          </TouchableOpacity>
+          </View>
+        ) : (
+          <View className='w-full flex flex-col gap-y-3.5 justify-end mb-3'>
+            <TouchableOpacity
+              className='h-10 w-full flex justify-center bg-[#FFDE1A] border border-b-4 border-[#FFCE00] rounded-xl'
+              onPress={codeEntered}
+            >
+              <Text className='text-white text-center text-md font-bold' onPress={codeEntered}>JOIN CHOIR</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+    </View>,
   ];
 
 
