@@ -10,6 +10,9 @@ import auth from '@react-native-firebase/auth';
 import { ScrollView as GestureScrollView } from 'react-native-gesture-handler';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import firestore from '@react-native-firebase/firestore';
+import Video from 'react-native-video';
+import TrackPlayer from 'react-native-track-player';
+import storage from '@react-native-firebase/storage';
 
 
 const Stack = createNativeStackNavigator();
@@ -74,14 +77,19 @@ const GameScreen = ({ user }) => {
   const spinValue = useRef(new Animated.Value(0)).current;
   const [choirName, setChoirName] = useState('');   // State for storing the choir name
   const [selectedChoir, setSelectedChoir] = useState(null);
+  const [player, setPlayer] = useState(null);
+  const [paused, setPaused] = useState(true);
 
-  async function signOut() {
-    try {
-      await auth().signOut();
-    } catch (error) {
-      console.log(error);
+  // handle audio and video
+
+  const handleSelectSong = song => {
+    setSelectedSong(song);
+    setMusicSelected(true);
+    // Optionally stop the current player if any
+    if (player) {
+      player.pause();
     }
-  }
+  };
 
   // Subscribe to users firestore and retrieve choir_selected
   useEffect(() => {
@@ -116,6 +124,7 @@ const GameScreen = ({ user }) => {
                     files: doc.data().files || []
                   }));
                   setSongs(songsData);
+                  console.log(songsData);
                 });
               
               choirSubscriberUnsubscribe = choirSubscriber; // Store unsubscribe function for cleanup
@@ -155,7 +164,6 @@ const GameScreen = ({ user }) => {
     outputRange: ['0deg', '7000deg'],
   });
 
-  const totalPages = 3; // Update this based on your actual number of pages
 
   const handleScroll = (event) => {
     const contentOffsetX = event.nativeEvent.contentOffset.x;
@@ -164,20 +172,57 @@ const GameScreen = ({ user }) => {
     setCurrentPage(pageIndex);
   };
 
-  function discClicked() {
-    console.log("disc clicked")
-    setMusicSelected(!musicSelected);
-  }
-
-  const handleSelectSong = song => {
-    setSelectedSong(song);
-    setMusicSelected(true);
-  };
-
   const handleBackToSongs = () => {
     setMusicSelected(false);
     setSelectedSong(null);
   };
+
+
+  // handle audio playback
+
+  useEffect(() => {
+    TrackPlayer.setupPlayer().then(() => {
+        console.log('TrackPlayer initialized');
+    }).catch(error => {
+        console.error('Error initializing TrackPlayer:', error);
+    });
+
+    return () => {
+    };
+  }, []);
+
+
+  async function playAudio(file_url) {
+    const file_proper_url = await storage().ref(file_url).getDownloadURL();
+    console.log(file_proper_url);
+    setPaused(!paused);
+
+    await TrackPlayer.add({
+        id: file_url,
+        url: file_proper_url,
+        title: 'Track Title',
+        artist: 'Track Artist',
+    });
+
+    if (paused) {
+      await TrackPlayer.play();
+    } else {
+      await TrackPlayer.pause();
+    }
+
+  }
+
+  // random signout function
+
+  async function signOut() {
+    try {
+      await auth().signOut();
+    } catch (error) {
+      console.log(error);
+    }
+  }
+
+  
 
   return (
     <View className="flex-1">
@@ -213,10 +258,20 @@ const GameScreen = ({ user }) => {
             <View className="flex-1 bg-white">
             <View className="w-screen h-screen flex items-center justify-center bg-white -mt-36">
               <Text className="text-2xl mb-4">{selectedSong.name}</Text>
-              {/* Example of displaying song details, customize as needed */}
+
+
               {selectedSong.files && selectedSong.files.map((file, index) => (
-                <Text key={index}>{file.name}</Text>
+                <View>
+                  <Text key={index}>{file.name}{file.url}</Text>
+
+                  <TouchableOpacity onPress={() => playAudio(file.url)} className="mt-4 bg-blue-500 text-white p-2 rounded">
+                    <Text>GET LINK AND PLAY AUDIO</Text>
+                  </TouchableOpacity>
+
+                </View>
               ))}
+
+
               <TouchableOpacity onPress={handleBackToSongs} className="mt-4 bg-blue-500 text-white p-2 rounded">
                 <Text>Back to Songs</Text>
               </TouchableOpacity>
@@ -287,3 +342,13 @@ const GameScreen = ({ user }) => {
   );
  
 }
+
+const styles = StyleSheet.create({
+  backgroundVideo: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    bottom: 0,
+    right: 0,
+  },
+});
