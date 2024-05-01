@@ -124,6 +124,7 @@ function Starter() {
         .collection('users')
         .doc(userCredential.user.uid)
         .set({
+          choir_selected: choirJoinUid,
           choirs_joined: [ choirJoinUid ],
           email: username,
           emailVerified: false,
@@ -161,6 +162,7 @@ function Starter() {
         const capitalizedLastName = lastName.charAt(0).toUpperCase() + lastName.slice(1).toLowerCase();
   
         await userDocRef.set({
+          choir_selected: choirJoinUid,
           choirs_joined: [ choirJoinUid ],
           email: userCredential.user.email,
           emailVerified: userCredential.user.emailVerified,
@@ -202,6 +204,10 @@ async function justGoogleSignin() {
     console.error('Google Sign-In Error: ', error);
     throw new Error(error);
   }
+}
+
+function joinNewChoir() {
+  console.log('Joining new choir');
 }
   
   const screens = [
@@ -512,7 +518,7 @@ async function justGoogleSignin() {
               className='h-10 w-full flex justify-center bg-[#FFDE1A] border border-b-4 border-[#FFCE00] rounded-xl'
               onPress={codeEntered}
             >
-              <Text className='text-white text-center text-md font-bold' onPress={codeEntered}>JOIN CHOIR</Text>
+              <Text className='text-white text-center text-md font-bold' onPress={joinNewChoir}>JOIN CHOIR</Text>
             </TouchableOpacity>
           </View>
         )}
