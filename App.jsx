@@ -13,7 +13,7 @@ import firestore from '@react-native-firebase/firestore';
 import Video from 'react-native-video';
 import TrackPlayer from 'react-native-track-player';
 import storage from '@react-native-firebase/storage';
-
+import Slider from '@react-native-community/slider'
 
 const Stack = createNativeStackNavigator();
 
@@ -178,39 +178,6 @@ const GameScreen = ({ user }) => {
   };
 
 
-  // handle audio playback
-
-  useEffect(() => {
-    TrackPlayer.setupPlayer().then(() => {
-        console.log('TrackPlayer initialized');
-    }).catch(error => {
-        console.error('Error initializing TrackPlayer:', error);
-    });
-
-    return () => {
-    };
-  }, []);
-
-
-  async function playAudio(file_url) {
-    const file_proper_url = await storage().ref(file_url).getDownloadURL();
-    console.log(file_proper_url);
-    setPaused(!paused);
-
-    await TrackPlayer.add({
-        id: file_url,
-        url: file_proper_url,
-        title: 'Track Title',
-        artist: 'Track Artist',
-    });
-
-    if (paused) {
-      await TrackPlayer.play();
-    } else {
-      await TrackPlayer.pause();
-    }
-
-  }
 
   // random signout function
 
@@ -222,7 +189,6 @@ const GameScreen = ({ user }) => {
     }
   }
 
-  
 
   return (
     <View className="flex-1">
@@ -255,22 +221,20 @@ const GameScreen = ({ user }) => {
       </View>
 
       {musicSelected && selectedSong ? (
-            <View className="flex-1 bg-white">
-            <View className="w-screen h-screen flex items-center justify-center bg-white -mt-36">
+            <View className="flex-1 bg-black">
+            <View className="w-screen h-screen flex items-center justify-center bg-black -mt-36">
               <Text className="text-2xl mb-4">{selectedSong.name}</Text>
-
 
               {selectedSong.files && selectedSong.files.map((file, index) => (
                 <View>
                   <Text key={index}>{file.name}{file.url}</Text>
 
-                  <TouchableOpacity onPress={() => playAudio(file.url)} className="mt-4 bg-blue-500 text-white p-2 rounded">
-                    <Text>GET LINK AND PLAY AUDIO</Text>
-                  </TouchableOpacity>
+                  <AudioPlayer
+                    url={'https://firebasestorage.googleapis.com/v0/b/harmonyhive-b4705.appspot.com/o/TUnrM8z359eWvkV6xnFY%2Fsongs%2F2UtpRdsrS4wY8bZA8rLe%2Fmixaund-optimistic-inspirational.mp3?alt=media&token=9bdd7e0f-f6e3-46c9-bbac-208ad92b6840'}
+                  />
 
                 </View>
               ))}
-
 
               <TouchableOpacity onPress={handleBackToSongs} className="mt-4 bg-blue-500 text-white p-2 rounded">
                 <Text>Back to Songs</Text>
@@ -343,12 +307,266 @@ const GameScreen = ({ user }) => {
  
 }
 
-const styles = StyleSheet.create({
-  backgroundVideo: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    bottom: 0,
-    right: 0,
+
+
+
+
+
+
+
+
+
+import { ActivityIndicator, LayoutAnimation, UIManager } from "react-native";
+import { Images } from './public/index'
+
+UIManager.setLayoutAnimationEnabledExperimental &&
+UIManager.setLayoutAnimationEnabledExperimental(true);
+
+const volumeControlTime = 3000;
+ 
+export const AudioPlayer = (props) => {
+  const { url, style, repeatOnComponent, repeatOffComponent } = props;
+  const [paused, setPaused] = useState(true);
+
+  const videoRef = useRef(null);
+  const controlTimer = useRef(0);
+
+  const [totalLength, setTotalLength] = useState(0);
+  const [currentPosition, setCurrentPosition] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [volume, setVolume] = useState(0.7);
+  const [volumeControl, setVolumeControl] = useState(false);
+  const [repeat, setRepeat] = useState(false);
+
+  const onSeek = (time) => {
+    time = Math.round(time);
+    videoRef && videoRef.current.seek(time);
+    setCurrentPosition(time);
+    setPaused(false);
+  };
+
+  const fixDuration = (data) => {
+    setLoading(false);
+    setTotalLength(Math.floor(data.duration));
+  };
+
+  const setTime = (data) => {
+    setCurrentPosition(Math.floor(data.currentTime));
+  };
+
+  const togglePlay = () => {
+    setPaused(!paused);
+  };
+
+  const toggleRepeat = () => {
+    setRepeat(!repeat);
+  };
+
+  const toggleVolumeControl = () => {
+    setVolumeTimer(!volumeControl);
+    LayoutAnimation.easeInEaseOut();
+    setVolumeControl(!volumeControl);
+  };
+
+  const setVolumeTimer = (setTimer = true) => {
+    clearTimeout(controlTimer.current);
+    controlTimer.current = 0;
+    if (setTimer) {
+      controlTimer.current = setTimeout(() => {
+        LayoutAnimation.easeInEaseOut();
+        setVolumeControl(false);
+      }, volumeControlTime);
+    }
+  };
+
+  const onVolumeChange = (vol) => {
+    setVolumeTimer();
+    setVolume(vol);
+  };
+
+  const resetAudio = () => {
+    if (!repeat) {
+      setPaused(true);
+    }
+    setCurrentPosition(0);
+  };
+
+  return (
+    <View style={[style && style, {}]}>
+      <Video
+        source={{ uri: url }}
+        ref={videoRef}
+        playInBackground={false}
+        audioOnly={true}
+        playWhenInactive={false}
+        paused={paused}
+        onEnd={resetAudio}
+        onLoad={fixDuration}
+        onLoadStart={() => setLoading(true)}
+        onProgress={setTime}
+        volume={volume}
+        repeat={repeat}
+        style={{ height: 0, width: 0 }}
+      />
+
+      <View>
+        <View style={styles.rowContainer}>
+          {loading && (
+            <View style={{ margin: 18 }}>
+              <ActivityIndicator size="large" color="#FFF"/>
+            </View>
+          ) || (
+            <View style={styles.actionsContainer}>
+              <TouchableOpacity
+                hitSlop={{ top: 10, bottom: 10, right: 10, left: 10 }}
+                style={styles.iconContainer}
+                onPress={toggleRepeat}
+              >
+                <Image source={Images.repeatIcon} style={styles.playIcon}/>
+                {!repeat && <View style={styles.crossLine}/>}
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.iconContainer, styles.playBtn]} onPress={togglePlay}>
+                <Image
+                  source={paused ? Images.playIcon :  Images.pauseIcon}
+                  style={styles.playIcon}
+                />
+              </TouchableOpacity>
+              <View
+                style={[
+                  styles.volumeControlContainer,
+                  volumeControl ? { paddingHorizontal: 12 } : { backgroundColor: "transparent" }
+                ]}
+              >
+                <TouchableOpacity
+                  hitSlop={{ top: 10, bottom: 10, right: 10, left: 10 }}
+                  style={styles.iconContainer}
+                  onPress={toggleVolumeControl}
+                >
+                  <Image
+                    source={volume === 0 ?  Images.muteIcon : Images.soundIcon}
+                    style={styles.playIcon}
+                  />
+                </TouchableOpacity>
+                {volumeControl && (
+                  <Slider
+                    style={styles.volumeSlider}
+                    minimumValue={0}
+                    maximumValue={1}
+                    minimumTrackTintColor={'#fff'}
+                    maximumTrackTintColor={'grey'}
+                    thumbTintColor={'#fff'}
+                    onSlidingComplete={onVolumeChange}
+                    value={volume}
+                  />
+                )}
+              </View>
+            </View>
+          )}
+
+          <View style={styles.sliderContainer}>
+            <Slider
+              style={styles.slider}
+              minimumValue={0}
+              maximumValue={Math.max(totalLength, 1, currentPosition + 1)}
+              minimumTrackTintColor={'#fff'}
+              maximumTrackTintColor={'grey'}
+              onSlidingComplete={onSeek}
+              value={currentPosition}
+            />
+            <View style={styles.durationContainer}>
+              <Text style={styles.timeText}>
+                {toHHMMSS(currentPosition)}
+              </Text>
+              <Text style={styles.timeText}>
+                {toHHMMSS(totalLength)}
+              </Text>
+            </View>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+};
+
+export function toHHMMSS(secs) {
+  const sec_num = parseInt(secs, 10);
+  const hours = Math.floor(sec_num / 3600);
+  const minutes = Math.floor(sec_num / 60) % 60;
+  const seconds = sec_num % 60;
+
+  return [hours, minutes, seconds]
+    .map((v) => (v < 10 ? "0" + v : v))
+    .filter((v, i) => v !== "00" || i > 0)
+    .join(":");
+}
+
+import { Platform } from "react-native";
+
+export const styles = StyleSheet.create({
+  rowContainer: {
+    justifyContent: "flex-end",
+    alignItems: "center",
   },
+  iconContainer: {
+    alignSelf: "center",
+    position: "relative",
+  },
+  playBtn: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  sliderContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    width: "100%",
+  },
+  slider: {
+    height: 30,
+    width: "100%",
+    marginBottom: 3,
+  },
+  durationContainer: { flexDirection: "row", justifyContent: "space-between" },
+  actionsContainer: {
+    display: "flex",
+    flexDirection: "row",
+    justifyContent: "space-around",
+    alignItems: "center",
+    width: "90%",
+    marginBottom: 10,
+  },
+  crossLine: {
+    position: "absolute",
+    transform: [ {rotate: "-60deg"} ],
+    top: 15,
+    left: -1,
+    width: 30,
+    height: 1,
+    borderBottomColor: '#fff',
+    borderBottomWidth: 2,
+  },
+  volumeControlContainer: {
+    display: "flex",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-evenly",
+    backgroundColor: "#00000099",
+    paddingHorizontal: 16,
+    borderRadius: 50,
+    ...Platform.select({
+      ios: {
+        height: 44
+      },
+      android: {
+        height: 40
+      },
+    }),
+  },
+  volumeSlider: {
+    width: '50%',
+  },
+  timeText: {
+    color: '#fff',
+    fontSize: 18,
+  },
+  playIcon: { height: 30, width: 30, resizeMode: 'contain' },
 });
