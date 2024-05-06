@@ -5,6 +5,7 @@ import { View, Text, TextInput, TouchableOpacity, Image, StatusBar, ScrollView, 
 import { styled } from 'nativewind';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import Starter from './pages/Starter';
+import ChatScreen from './pages/ChatScreen';
 import SplashScreen from 'react-native-splash-screen'
 import auth from '@react-native-firebase/auth';
 import { ScrollView as GestureScrollView } from 'react-native-gesture-handler';
@@ -14,6 +15,19 @@ import Video from 'react-native-video';
 import TrackPlayer from 'react-native-track-player';
 import storage from '@react-native-firebase/storage';
 import Slider from '@react-native-community/slider'
+import { ActivityIndicator, LayoutAnimation, UIManager } from "react-native";
+import { Images } from './public/index'
+import { Platform } from "react-native";
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+
+
+UIManager.setLayoutAnimationEnabledExperimental &&
+UIManager.setLayoutAnimationEnabledExperimental(true);
+
+const volumeControlTime = 3000;
+
+
+
 
 const Stack = createNativeStackNavigator();
 
@@ -47,7 +61,9 @@ function App() {
   );
 } else {
   return (
+    <SafeAreaProvider>
         <GameScreen user={user}/>
+    </SafeAreaProvider>
   );
 }
 }
@@ -76,9 +92,14 @@ const GameScreen = ({ user }) => {
   const [selectedSong, setSelectedSong] = useState(null);
   const spinValue = useRef(new Animated.Value(0)).current;
   const [choirName, setChoirName] = useState('');   // State for storing the choir name
-  const [selectedChoir, setSelectedChoir] = useState(null);
   const [player, setPlayer] = useState(null);
   const [paused, setPaused] = useState(true);
+  const [chatScreen, setChatScreen] = useState(false);
+  const [choirId, setChoirId] = useState(null);
+
+  function goToChat () {
+    setChatScreen(true);
+  }
 
   // handle audio and video
 
@@ -103,6 +124,7 @@ const GameScreen = ({ user }) => {
       .onSnapshot(userDocumentSnapshot => {
         const userData = userDocumentSnapshot.data();
         const selectedChoir = userData?.choir_selected;
+        setChoirId(selectedChoir);
         
         // Fetch choir name and songs if a choir is selected
         if (selectedChoir) {
@@ -191,7 +213,14 @@ const GameScreen = ({ user }) => {
 
 
   return (
+    <NavigationContainer>
     <View className="flex-1">
+
+      { chatScreen? ( <ChatScreen 
+      onBack={() => setChatScreen(false)} choirId={choirId} user={user}/> ) 
+      
+      : ( 
+        <>
       {/* Status Bar */}
       <StatusBar barStyle="light-content" backgroundColor="#FFCE00" />
         <Text className=' text-slate-900'>{choirName}</Text>
@@ -221,15 +250,20 @@ const GameScreen = ({ user }) => {
       </View>
 
       {musicSelected && selectedSong ? (
-            <View className="flex-1 bg-black">
-            <View className="w-screen h-screen flex items-center justify-center bg-black -mt-36">
+            <View className="flex-1 bg-emerald-200">
+            <View className="w-screen h-screen flex items-center justify-center -mt-36">
               <Text className="text-2xl mb-4">{selectedSong.name}</Text>
 
-              {selectedSong.files && selectedSong.files.map((file, index) => (
-                <View>
-                  <Text key={index}>{file.name}{file.url}</Text>
+            {selectedSong && selectedSong.files && selectedSong.files.map((file, index) => (
+
+                <View
+                key={`${file.name}-${index}_view`}
+                >
+                  <Text 
+                  key={`${file.name}-${index}_text`}>{file.name}{file.url}</Text>
 
                   <AudioPlayer
+                  key={`${file.name}-${index}_audioplayer`}
                     url={'https://firebasestorage.googleapis.com/v0/b/harmonyhive-b4705.appspot.com/o/TUnrM8z359eWvkV6xnFY%2Fsongs%2F2UtpRdsrS4wY8bZA8rLe%2Fmixaund-optimistic-inspirational.mp3?alt=media&token=9bdd7e0f-f6e3-46c9-bbac-208ad92b6840'}
                   />
 
@@ -287,22 +321,33 @@ const GameScreen = ({ user }) => {
               ))}
             </View>
 
+            {/* Bottom Nav */}
+            <View className="flex-row justify-between p-4 bg-white items-center border-t border-gray-200">
+              <TouchableOpacity>
+                <Image source={require('./public/duo.png')} className="h-6 w-6" />
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={goToChat}>
+                <Image source={require('./public/chaticon.png')} className="h-6 w-6" />
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={signOut}>
+                <Image source={require('./public/1.png')} className="h-6 w-6" />
+              </TouchableOpacity>
+            </View>
+
           </>
         )}
+</>
+      )}
+
+    
 
 
 
-      {/* Bottom Nav */}
-      <View className="flex-row justify-between p-4 bg-white items-center border-t border-gray-200">
-        <TouchableOpacity>
-          <Image source={require('./public/duo.png')} className="h-6 w-6" />
-        </TouchableOpacity>
-        {/* ... other nav items */}
-        <TouchableOpacity onPress={signOut}>
-          <Image source={require('./public/1.png')} className="h-6 w-6" />
-        </TouchableOpacity>
-      </View>
+
     </View>
+    </NavigationContainer>
   );
  
 }
@@ -316,15 +361,24 @@ const GameScreen = ({ user }) => {
 
 
 
-import { ActivityIndicator, LayoutAnimation, UIManager } from "react-native";
-import { Images } from './public/index'
 
-UIManager.setLayoutAnimationEnabledExperimental &&
-UIManager.setLayoutAnimationEnabledExperimental(true);
 
-const volumeControlTime = 3000;
+
+
+
+
+
+
+
+
+
+
+
  
-export const AudioPlayer = (props) => {
+
+
+
+const AudioPlayer = (props) => {
   const { url, style, repeatOnComponent, repeatOffComponent } = props;
   const [paused, setPaused] = useState(true);
 
@@ -391,6 +445,18 @@ export const AudioPlayer = (props) => {
     setCurrentPosition(0);
   };
 
+  function toHHMMSS(secs) {
+    const sec_num = parseInt(secs, 10);
+    const hours = Math.floor(sec_num / 3600);
+    const minutes = Math.floor(sec_num / 60) % 60;
+    const seconds = sec_num % 60;
+  
+    return [hours, minutes, seconds]
+      .map((v) => (v < 10 ? "0" + v : v))
+      .filter((v, i) => v !== "00" || i > 0)
+      .join(":");
+  }
+
   return (
     <View style={[style && style, {}]}>
       <Video
@@ -410,25 +476,30 @@ export const AudioPlayer = (props) => {
       />
 
       <View>
-        <View style={styles.rowContainer}>
+        <View className="justify-end items-center">
           {loading && (
-            <View style={{ margin: 18 }}>
+            <View className="m-16">
               <ActivityIndicator size="large" color="#FFF"/>
             </View>
           ) || (
-            <View style={styles.actionsContainer}>
+            <View className="flex flex-row justify-around items-center w-11/12 mb-10"
+            >
               <TouchableOpacity
                 hitSlop={{ top: 10, bottom: 10, right: 10, left: 10 }}
-                style={styles.iconContainer}
+                className="align-middle relative"
                 onPress={toggleRepeat}
               >
-                <Image source={Images.repeatIcon} style={styles.playIcon}/>
-                {!repeat && <View style={styles.crossLine}/>}
+                
+
+                <Image source={Images.repeatIcon} className="h-[30px] w-[30px] object-contain"/>
+                {!repeat && <View
+                className="absolute transform -rotate-[60deg] top-15 left--1 w-30 h-1 border-b-2 border-white"
+                />}
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.iconContainer, styles.playBtn]} onPress={togglePlay}>
+              <TouchableOpacity className="align-middle relative justify-center items-center" onPress={togglePlay}>
                 <Image
                   source={paused ? Images.playIcon :  Images.pauseIcon}
-                  style={styles.playIcon}
+                  className="h-[30px] w-[30px] object-contain"
                 />
               </TouchableOpacity>
               <View
@@ -439,17 +510,18 @@ export const AudioPlayer = (props) => {
               >
                 <TouchableOpacity
                   hitSlop={{ top: 10, bottom: 10, right: 10, left: 10 }}
-                  style={styles.iconContainer}
+                  className="align-middle relative"
+
                   onPress={toggleVolumeControl}
                 >
                   <Image
                     source={volume === 0 ?  Images.muteIcon : Images.soundIcon}
-                    style={styles.playIcon}
+                    className="h-[30px] w-[30px] object-contain"
                   />
                 </TouchableOpacity>
                 {volumeControl && (
                   <Slider
-                    style={styles.volumeSlider}
+                    className="w-1/2"
                     minimumValue={0}
                     maximumValue={1}
                     minimumTrackTintColor={'#fff'}
@@ -463,9 +535,11 @@ export const AudioPlayer = (props) => {
             </View>
           )}
 
-          <View style={styles.sliderContainer}>
+          <View className="px-16 pb-12 w-full"
+          >
+
             <Slider
-              style={styles.slider}
+              className="h-28 w-full mb-3"
               minimumValue={0}
               maximumValue={Math.max(totalLength, 1, currentPosition + 1)}
               minimumTrackTintColor={'#fff'}
@@ -473,11 +547,13 @@ export const AudioPlayer = (props) => {
               onSlidingComplete={onSeek}
               value={currentPosition}
             />
-            <View style={styles.durationContainer}>
-              <Text style={styles.timeText}>
+            <View className="flex flex-row justify-between">
+
+
+              <Text className="text-white text-lg">
                 {toHHMMSS(currentPosition)}
               </Text>
-              <Text style={styles.timeText}>
+              <Text className="text-white text-lg">
                 {toHHMMSS(totalLength)}
               </Text>
             </View>
@@ -488,62 +564,9 @@ export const AudioPlayer = (props) => {
   );
 };
 
-export function toHHMMSS(secs) {
-  const sec_num = parseInt(secs, 10);
-  const hours = Math.floor(sec_num / 3600);
-  const minutes = Math.floor(sec_num / 60) % 60;
-  const seconds = sec_num % 60;
 
-  return [hours, minutes, seconds]
-    .map((v) => (v < 10 ? "0" + v : v))
-    .filter((v, i) => v !== "00" || i > 0)
-    .join(":");
-}
+const styles = StyleSheet.create({
 
-import { Platform } from "react-native";
-
-export const styles = StyleSheet.create({
-  rowContainer: {
-    justifyContent: "flex-end",
-    alignItems: "center",
-  },
-  iconContainer: {
-    alignSelf: "center",
-    position: "relative",
-  },
-  playBtn: {
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  sliderContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    width: "100%",
-  },
-  slider: {
-    height: 30,
-    width: "100%",
-    marginBottom: 3,
-  },
-  durationContainer: { flexDirection: "row", justifyContent: "space-between" },
-  actionsContainer: {
-    display: "flex",
-    flexDirection: "row",
-    justifyContent: "space-around",
-    alignItems: "center",
-    width: "90%",
-    marginBottom: 10,
-  },
-  crossLine: {
-    position: "absolute",
-    transform: [ {rotate: "-60deg"} ],
-    top: 15,
-    left: -1,
-    width: 30,
-    height: 1,
-    borderBottomColor: '#fff',
-    borderBottomWidth: 2,
-  },
   volumeControlContainer: {
     display: "flex",
     flexDirection: "row",
@@ -561,12 +584,4 @@ export const styles = StyleSheet.create({
       },
     }),
   },
-  volumeSlider: {
-    width: '50%',
-  },
-  timeText: {
-    color: '#fff',
-    fontSize: 18,
-  },
-  playIcon: { height: 30, width: 30, resizeMode: 'contain' },
-});
+}); 
