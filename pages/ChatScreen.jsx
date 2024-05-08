@@ -9,6 +9,7 @@ import { SvgXml } from 'react-native-svg';
 import Tts from 'react-native-tts';
 import EmojiPicker from 'rn-emoji-keyboard'
 import RNFS from 'react-native-fs';
+import auth from '@react-native-firebase/auth';
 
 
 const microphoneSvg = `
@@ -55,7 +56,7 @@ const happyFaceSvg = `
   </svg>
   `;
 
-function ChatScreen({ onBack, choirId, user }) {
+function ChatScreen({ onBack, user }) {
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [showIcons, setShowIcons] = useState('');
@@ -66,6 +67,26 @@ function ChatScreen({ onBack, choirId, user }) {
   const [reactionMessageId, setReactionMessageId] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [loadingImages, setLoadingImages] = useState({});
+
+
+  const [choirId, setChoirId] = useState(null);
+
+  useEffect(() => {
+    const currentUser = auth().currentUser;
+    if (currentUser) {
+      const unsubscribe = firestore()
+        .collection('users')
+        .doc(currentUser.uid)
+        .onSnapshot((snapshot) => {
+          if (snapshot.exists) {
+            const userData = snapshot.data();
+            setChoirId(userData.choir_selected);
+          }
+        });
+
+      return () => unsubscribe();
+    }
+  }, []);
 
   const handleImageLoad = (messageId) => {
     setLoadingImages((prevState) => ({

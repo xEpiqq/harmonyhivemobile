@@ -75,7 +75,7 @@ function App() {
               {props => <Profile {...props} user={user} />}
             </Tab.Screen>
             <Tab.Screen name="Chat" options={{ tabBarStyle: { display: 'none' }, }} >
-              {props => <ChatScreen {...props} onBack={() => props.navigation.goBack()} choirId="TUnrM8z359eWvkV6xnFY" user={user}  />}
+              {props => <ChatScreen {...props} onBack={() => props.navigation.goBack()} user={user}  />}
             </Tab.Screen>
           </Tab.Navigator>
         )}
