@@ -291,7 +291,7 @@ function ChatScreen({ onBack, choirId, user }) {
         <View className="flex-row items-start px-4">
           {showProfilePicture && (
             <View className="relative">
-              <Image source={{ uri: item.user.avatar }} className="w-9 h-9 rounded-xl shadow-lg" />
+              <Image source={{ uri: item.user.avatar }} className="w-9 h-9 rounded-xl" />
             </View>
           )}
           <View className={`rounded-xl w-full ${showProfilePicture ? '' : 'ml-9'}`}>
