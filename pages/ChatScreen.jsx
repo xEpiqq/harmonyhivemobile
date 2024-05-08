@@ -8,6 +8,7 @@ import storage from '@react-native-firebase/storage';
 import { SvgXml } from 'react-native-svg';
 import Tts from 'react-native-tts';
 import EmojiPicker from 'rn-emoji-keyboard'
+import RNFS from 'react-native-fs';
 
 
 const microphoneSvg = `
@@ -63,6 +64,15 @@ function ChatScreen({ onBack, choirId, user }) {
   const [emojiKeyboard, setEmojiKeyboard] = useState(false);
   const [emojiKeyboardNumberTwo, setEmojiKeyboardNumberTwo] = useState(false);
   const [reactionMessageId, setReactionMessageId] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [loadingImages, setLoadingImages] = useState({});
+
+  const handleImageLoad = (messageId) => {
+    setLoadingImages((prevState) => ({
+      ...prevState,
+      [messageId]: false,
+    }));
+  };
 
   useEffect(() => {
     const unsubscribe = firestore()
@@ -82,12 +92,9 @@ function ChatScreen({ onBack, choirId, user }) {
   }, [choirId]);
 
   const handleSendMessage = async () => {
-    if (inputText.trim() !== '') {
-      await firestore()
-        .collection('choirs')
-        .doc(choirId)
-        .collection('messages')
-        .add({
+    if (inputText.trim() !== '' || selectedFile) {
+      try {
+        const messageData = {
           message: inputText.trim(),
           createdAt: firestore.FieldValue.serverTimestamp(),
           user: {
@@ -95,58 +102,44 @@ function ChatScreen({ onBack, choirId, user }) {
             name: user.displayName || user.email,
             avatar: user.photoURL || 'https://via.placeholder.com/150',
           },
-        });
-      setInputText('');
+        };
+  
+        // Send the message first
+        const messageRef = await firestore()
+          .collection('choirs')
+          .doc(choirId)
+          .collection('messages')
+          .add(messageData);
+  
+        // Upload the file in the background
+        if (selectedFile) {
+          uploadFile(selectedFile, messageRef.id);
+        }
+  
+        setInputText('');
+        setSelectedFile(null);
+      } catch (error) {
+        console.log('Error sending message:', error);
+        throw error;
+      }
     }
   };
-
-  const handleFileUpload = async (choirId, user) => {
+  
+  const handleFileUpload = async () => {
     try {
-      // Use DocumentPicker to select a file
-      const res = await DocumentPicker.pick({
+      const pickedFile = await DocumentPicker.pickSingle({
         type: [DocumentPicker.types.allFiles],
       });
   
-      const { uri, name, type } = res;
+      if (!pickedFile || !pickedFile.uri) {
+        console.log('No file selected');
+        return;
+      }
   
-      // Check the response status
-      const response = await fetch(uri);
-      if (!response.ok) throw new Error(`Unable to fetch the file: ${response.statusText}`);
-  
-      const blob = await response.blob();
-  
-      // Prepare reference in Firebase storage
-      const reference = storage().ref(`choirs/${choirId}/files/${name}`);
-      await reference.put(blob, {
-        contentType: type,
-      });
-  
-      // Retrieve the download URL
-      const downloadURL = await reference.getDownloadURL();
-  
-      // Add a new message with the file to Firestore
-      const messageRef = await firestore()
-        .collection('choirs')
-        .doc(choirId)
-        .collection('messages')
-        .add({
-          message: '',
-          createdAt: firestore.FieldValue.serverTimestamp(),
-          user: {
-            id: user.uid,
-            name: user.displayName || user.email,
-            avatar: user.photoURL || 'https://via.placeholder.com/150',
-          },
-          reactions: {},
-          file: {
-            url: downloadURL,
-            name,
-            type,
-          },
-        });
+      setSelectedFile(pickedFile);
     } catch (error) {
-      console.log('Error uploading file:', error);
-      throw error; // Re-throwing the error is useful if you want to handle it further up the call stack
+      console.log('Error selecting file:', error);
+      throw error;
     }
   };
 
@@ -262,8 +255,45 @@ function ChatScreen({ onBack, choirId, user }) {
     }
   }
 
+  const uploadFile = async (file, messageId) => {
+    try {
 
+      setLoadingImages((prevState) => ({
+        ...prevState,
+        [messageId]: true,
+      }));
 
+      const { uri, name, type } = file;
+      const fileData = await RNFS.readFile(uri, 'base64');
+      const reference = storage().ref(`choirs/${choirId}/files/${name}`);
+      await reference.putString(fileData, 'base64', { contentType: type });
+      const downloadURL = await reference.getDownloadURL();
+  
+      // Update the message document with the file details
+      await firestore()
+        .collection('choirs')
+        .doc(choirId)
+        .collection('messages')
+        .doc(messageId)
+        .update({
+          file: {
+            name,
+            type,
+            url: downloadURL,
+          },
+        });
+
+        setLoadingImages((prevState) => ({
+          ...prevState,
+          [messageId]: false,
+        }));
+
+    } catch (error) {
+      console.log('Error uploading file:', error);
+      throw error;
+    }
+  };
+  
     const renderItem = ({ item, index }) => {
       const previousItem = index < messages.length - 1 ? messages[index + 1] : null;
       const isSameUser = previousItem && item.user.id === previousItem.user.id;
@@ -306,11 +336,29 @@ function ChatScreen({ onBack, choirId, user }) {
             <TouchableOpacity onLongPress={() => handleNewReaction(item.id)} className="w-full">
               <Text className="text-base text-gray-800 px-4 pb-2" >{item.message}</Text>
             </TouchableOpacity>
+            
+            
             {item.file && (
-              <TouchableOpacity onPress={() => Linking.openURL(item.file.url)}>
-                <Text className="text-blue-600 underline px-4 pb-2">{item.file.name}</Text>
-              </TouchableOpacity>
+          <>
+            {item.file.type.startsWith('image/') ? (
+              <>
+                {loadingImages[item.id] ? (
+                  <View className="w-48 h-48 bg-gray-200 rounded-lg mt-2" />
+                ) : (
+                  <Image
+                    source={{ uri: item.file.url }}
+                    className="w-48 h-48 rounded-lg mt-2"
+                    resizeMode="cover"
+                  />
+                )}
+              </>
+            ) : (
+              <Text className="text-gray-600 px-4 pb-2">{item.file.name}</Text>
             )}
+          </>
+        )}
+
+
             <View className="flex-row items-center px-4 pb-2">
             
             
